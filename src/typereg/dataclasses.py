@@ -6,7 +6,7 @@ from .base import REGISTRY_STATE, SENTINEL
 from .utils import get_existing_field_info, get_parent_registry_root
 
 
-def tagged_dataclass(cls: type | None = None, /, **dataclass_kwargs) -> t.Any:
+def _dataclass(cls: type | None = None, /, **dataclass_kwargs) -> t.Any:
     """
     Create a stdlib dataclass that automatically includes the registry tag field.
 
@@ -90,7 +90,9 @@ def tagged_dataclass(cls: type | None = None, /, **dataclass_kwargs) -> t.Any:
             tag_value = class_to_tag[target_cls]
 
             # Get existing field information
-            existing_annotation, existing_default = get_existing_field_info(target_cls, tag_kwarg)
+            existing_annotation, existing_default = get_existing_field_info(
+                target_cls, tag_kwarg
+            )
 
             if existing_annotation is None and existing_default is SENTINEL:
                 # Ensure __annotations__ exists
@@ -130,4 +132,4 @@ def tagged_dataclass(cls: type | None = None, /, **dataclass_kwargs) -> t.Any:
 if t.TYPE_CHECKING:
     tagged_dataclass = dataclasses.dataclass  # type: ignore
 else:
-    tagged_dataclass = tagged_dataclass
+    tagged_dataclass = _dataclass

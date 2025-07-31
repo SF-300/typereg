@@ -93,16 +93,18 @@ def tag_of(registry: t.Any, entry: t.Any) -> str | None:
 def is_variant(registry: t.Any, obj_or_cls: t.Any) -> bool:
     """Check if obj_or_cls is a variant of the registry, including derived registries."""
     cls = extract_class_from_obj_or_cls(obj_or_cls)
-    tag_to_class = get_tag_to_class_mapping(registry)  # This now includes derived registry variants
+    tag_to_class = get_tag_to_class_mapping(
+        registry
+    )  # This now includes derived registry variants
     return cls in tag_to_class.values()
 
 
-def get_tag_kwarg(registry: t.Any) -> str | None:
+def get_tag_kwarg(registry: t.Any) -> str:
     """Get the tag keyword used by this registry."""
     cls = extract_class_from_obj_or_cls(registry)
     root = get_parent_registry_root(cls)
     if root is None:
-        return None
+        raise TypeError("Does not belong to a known registry")
     state = REGISTRY_STATE[root]
     return state["tag_kwarg"]
 

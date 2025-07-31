@@ -911,12 +911,14 @@ class DoctorUpdated(Message, _type_tag="doctor_updated"):  # type: ignore[misc]
 
 # Define a generic ActorState base class
 
+M = t.TypeVar("M", bound=Message)
+
 
 @dataclass(frozen=True, kw_only=True)
-class ActorState[M]:
+class ActorState(t.Generic[M]):
     """Base class for actor states, generic over message type."""
 
-    actor_stash: tuple[M, ...] = tuple()
+    actor_stash: tuple[M, ...] = ()
 
 
 # Create registry for concrete states
