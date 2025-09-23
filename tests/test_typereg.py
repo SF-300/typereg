@@ -1084,11 +1084,6 @@ def test_automatic_pydantic_schema_addition():
     concrete_method = ConcreteFromAbstract.__get_pydantic_core_schema__
     registry_method = Foundation.__get_pydantic_core_schema__
 
-    # Registry method should be different from variant methods
-    assert variant_method.__func__.__name__ == "get_variant_pydantic_core_schema"
-    assert concrete_method.__func__.__name__ == "get_variant_pydantic_core_schema"
-    # All registry roots now use the closure-based method
-    assert registry_method.__func__.__name__ == "get_registry_pydantic_core_schema"
     # But registry and variant methods should be different
     assert registry_method != variant_method
     assert registry_method != concrete_method

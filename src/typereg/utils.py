@@ -29,33 +29,6 @@ def get_parent_registry_root(cls: type) -> type | None:
     return next(registry_roots_iter, None)
 
 
-def create_union_serializer(tag_to_class: t.Mapping[str, type], tag_kwarg: str):
-    """Create a serializer for tagged unions."""
-
-    def union_serializer(value, serializer_func):
-        for tag, variant_class in tag_to_class.items():
-            if isinstance(value, variant_class):
-                serialized = serializer_func(value)
-                if isinstance(serialized, dict):
-                    serialized[tag_kwarg] = tag
-                return serialized
-        return serializer_func(value)
-
-    return union_serializer
-
-
-def create_variant_serializer(tag: str, tag_kwarg: str):
-    """Create a serializer for individual variants."""
-
-    def variant_serializer(value, serializer_func):
-        serialized = serializer_func(value)
-        if isinstance(serialized, dict):
-            serialized[tag_kwarg] = tag
-        return serialized
-
-    return variant_serializer
-
-
 def get_tag_to_class_mapping(registry: t.Any) -> dict[str, type]:
     """Get mapping from tags to classes for a registry."""
     cls = extract_class_from_obj_or_cls(registry)
@@ -93,9 +66,7 @@ def tag_of(registry: t.Any, entry: t.Any) -> str | None:
 def is_variant(registry: t.Any, obj_or_cls: t.Any) -> bool:
     """Check if obj_or_cls is a variant of the registry, including derived registries."""
     cls = extract_class_from_obj_or_cls(obj_or_cls)
-    tag_to_class = get_tag_to_class_mapping(
-        registry
-    )  # This now includes derived registry variants
+    tag_to_class = get_tag_to_class_mapping(registry)  # This now includes derived registry variants
     return cls in tag_to_class.values()
 
 

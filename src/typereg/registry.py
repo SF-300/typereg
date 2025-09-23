@@ -1,51 +1,11 @@
-import typing as t
-
-from pydantic_core import core_schema as cs
+import functools
 
 from .base import REGISTRY_STATE, SENTINEL, RegistryState
+from .pydantic import get_registry_pydantic_core_schema, get_variant_pydantic_core_schema
 from .utils import (
     NarrowingMapping,
-    create_union_serializer,
-    create_variant_serializer,
     get_parent_registry_root,
 )
-
-
-def _create_pydantic_tagged_union_schema(
-    tag_to_class: t.Mapping[str, type], tag_kwarg: str, handler
-) -> t.Any:
-    """Create Pydantic schema for tagged unions."""
-    # Create choices dict for tagged union
-    choices = {tag: handler(variant_class) for tag, variant_class in tag_to_class.items()}
-
-    # Create a serializer that adds the tag
-    union_serializer = create_union_serializer(tag_to_class, tag_kwarg)
-
-    # Create JsonOrPython schema to handle JSON vs Python validation differently
-    return cs.json_or_python_schema(
-        # For JSON mode, only allow tagged dicts
-        json_schema=cs.tagged_union_schema(
-            discriminator=tag_kwarg,
-            choices=choices,
-        ),
-        # For Python mode, allow both instances and tagged dicts
-        python_schema=cs.union_schema(
-            [
-                # Accept instances directly
-                cs.is_instance_schema(tuple(tag_to_class.values())),
-                # Accept tagged dicts in Python mode too
-                cs.tagged_union_schema(
-                    discriminator=tag_kwarg,
-                    choices=choices,
-                ),
-            ]
-        ),
-        serialization=cs.wrap_serializer_function_ser_schema(
-            union_serializer,
-            schema=cs.any_schema(),  # The serializer handles everything
-            info_arg=False,
-        ),
-    )
 
 
 def create_registry(tag_kwarg: str = "_type_tag"):
@@ -63,48 +23,6 @@ def create_registry(tag_kwarg: str = "_type_tag"):
     creates hierarchical derived registries.
     """
 
-    def get_registry_pydantic_core_schema(cls, source_type, handler):
-        # Check if cls is a registry root (direct or inheriting from our Registry family)
-        try:
-            state = REGISTRY_STATE[cls]
-        except KeyError:
-            return handler(source_type)
-
-        # This is a registry root - create tagged union schema
-        tag_to_class = state["tag_to_class"]
-        return _create_pydantic_tagged_union_schema(tag_to_class, tag_kwarg, handler)
-
-    def get_variant_pydantic_core_schema(cls, source_type, handler):
-        # Find the registry root for this variant in our family
-        registry = get_parent_registry_root(cls)
-        if registry is None:
-            raise AssertionError("No registry root found in this family")
-
-        state = REGISTRY_STATE[registry]
-
-        # Try to get the default schema for this class
-        default_schema = handler(source_type)
-
-        # Get the tag for this specific variant class
-        try:
-            tag = state["class_to_tag"][cls]
-        except KeyError:
-            # This variant is not registered (probably abstract), use default handling
-            return default_schema
-
-        # Create a serializer that adds the tag field
-        variant_serializer = create_variant_serializer(tag, tag_kwarg)
-
-        # Return the default schema with our custom serialization
-        return {
-            **default_schema,
-            "serialization": cs.wrap_serializer_function_ser_schema(
-                variant_serializer,
-                schema=default_schema,
-                info_arg=False,
-            ),
-        }
-
     class Registry:
         """
         Base class for creating type registries.
@@ -118,22 +36,17 @@ def create_registry(tag_kwarg: str = "_type_tag"):
 
         @classmethod
         def __get_pydantic_core_schema__(cls, source_type, handler):
-            # Use our closure function that has direct access to this Registry family
-            return get_registry_pydantic_core_schema(cls, source_type, handler)
+            return get_registry_pydantic_core_schema(cls, source_type, handler, tag_kwarg)
 
         def __init_subclass__(cls, **kwargs):
-            # Extract the tag value using this registry family's tag_kwarg
             tag = kwargs.pop(tag_kwarg, SENTINEL)
 
-            # Call parent __init_subclass__
             super().__init_subclass__(**kwargs)
 
-            # Find the registry root for this class
             parent_registry = get_parent_registry_root(cls)
 
             # Check if this is a direct Registry subclass (becomes a new registry root)
             if Registry in cls.__bases__:
-                # This is a new registry root - initialize its state
                 parent_state = (
                     RegistryState(
                         tag_to_class={},
@@ -159,7 +72,9 @@ def create_registry(tag_kwarg: str = "_type_tag"):
                     raise TypeError(
                         f"Registry root {cls.__name__} should not have own __get_pydantic_core_schema__"
                     )
-                cls.__get_pydantic_core_schema__ = classmethod(get_registry_pydantic_core_schema)  # type: ignore
+                cls.__get_pydantic_core_schema__ = classmethod(
+                    functools.partial(get_registry_pydantic_core_schema, tag_kwarg=tag_kwarg)
+                )  # type: ignore
                 return
 
             if parent_registry is None:
@@ -189,7 +104,9 @@ def create_registry(tag_kwarg: str = "_type_tag"):
                 raise TypeError(
                     f"Variant {cls.__name__} should not have own __get_pydantic_core_schema__"
                 )
-            cls.__get_pydantic_core_schema__ = classmethod(get_variant_pydantic_core_schema)  # type: ignore
+            cls.__get_pydantic_core_schema__ = classmethod(
+                functools.partial(get_variant_pydantic_core_schema, tag_kwarg=tag_kwarg)
+            )  # type: ignore
 
     return Registry
 
