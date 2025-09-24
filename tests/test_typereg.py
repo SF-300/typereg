@@ -2098,3 +2098,19 @@ def test_tagged_dataclass_multiple_registries():
     assert is_variant(RegistryA, instance_b) is False
     assert is_variant(EventRegistry, instance_b) is True
     assert is_variant(EventRegistry, instance_a) is False
+
+
+def test_changed_instance_level_tag_serialized():
+    import pydantic
+
+    class TestRegistry(Registry):
+        pass
+
+    @tagged_dataclass
+    class DataVariant(TestRegistry, _type_tag="data"):  # type: ignore[misc]
+        pass
+
+    instance_a = DataVariant()
+    instance_a._type_tag = "something_else"  # type: ignore
+    result_a = pydantic.TypeAdapter(DataVariant).dump_python(instance_a, mode="json")
+    assert result_a["_type_tag"] == "something_else"

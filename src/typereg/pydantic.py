@@ -64,7 +64,8 @@ def _create_variant_serializer(tag: str, tag_kwarg: str):
     def variant_serializer(value, serializer_func):
         serialized = serializer_func(value)
         if isinstance(serialized, dict):
-            serialized[tag_kwarg] = tag
+            # Read tag from instance if available, otherwise use class tag
+            serialized[tag_kwarg] = getattr(value, tag_kwarg, tag)
         return serialized
 
     return variant_serializer
